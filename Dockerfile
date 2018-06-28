@@ -17,32 +17,8 @@ RUN yum install -y curl \
 
 RUN yum clean all
 
-# install Minio (from minio/minio:Dockerfile.release)
-# FROM alpine:3.7
-
-COPY docker-entrypoint.sh healthcheck.sh /usr/bin/
-
-ENV MINIO_UPDATE off
-ENV MINIO_ACCESS_KEY_FILE=access_key \
-    MINIO_SECRET_KEY_FILE=secret_key
-
-RUN \
-     echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
-     curl https://dl.minio.io/server/minio/release/linux-amd64/minio > /usr/bin/minio && \
-     chmod +x /usr/bin/minio  && \
-     chmod +x /usr/bin/docker-entrypoint.sh && \
-     chmod +x /usr/bin/healthcheck.sh
-
-EXPOSE 9000
-
-ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
-
-VOLUME ["/data"]
-
-HEALTHCHECK --interval=30s --timeout=5s \
-    CMD /usr/bin/healthcheck.sh
-
-# end Minio install
+# set the root password so we can ssh in
+RUN echo changeme | passwd --stdin root
 
 #install Vertica
 ENV LANG en_US.utf8
@@ -51,9 +27,14 @@ ENV TZ "US/Eastern"
 #RUN groupadd -r verticadba
 #RUN useradd -r -m -g verticadba dbadmin
 
-COPY vertica-*.rpm /tmp/
+ADD packages/vertica-9.1.0-1.x86_64.RHEL6.rpm /tmp/
 
-RUN yum install -y /tmp/vertica-*.rpm
+RUN yum install -y /tmp/vertica-9.1.0-1.x86_64.RHEL6.rpm
+
+# copy in the patched Python file. Must match version above!
+COPY bootstrap_catalog.py /opt/vertica/share/eggs/vertica/engine/api/
+COPY load_remote_catalog.py /opt/vertica/share/eggs/vertica/engine/api/
+COPY vertica_download_file.py /opt/vertica/share/eggs/vertica/engine/api/
 
 # In theory, someone should make things work without ignoring the errors.
 # But that's in theory, and for now, this seems sufficient.
@@ -64,18 +45,42 @@ RUN yum install -y /tmp/vertica-*.rpm
 # create Vertica Eon mode DB using MC
 #RUN mkdir -p /home/dbadmin/catalog
 #RUN mkdir -p /home/dbadmin/data
-#USER root
-#RUN chown -R dbadmin /opt/vertica/
 
-RUN mkdir /tmp/.python-eggs
-RUN chown -R dbadmin /tmp/.python-eggs
-ENV PYTHON_EGG_CACHE /tmp/.python-eggs
+# ENV VERTICADATA /home/dbadmin/docker
+# VOLUME ["/home/dbadmin/docker"]
 
-ENV VERTICADATA /home/dbadmin/docker
-VOLUME ["/home/dbadmin/docker"]
+# add SSHD host keys
+ADD etc.ssh/* /etc/ssh/
+RUN chmod 600 /etc/ssh/*key*
 
+# add SSH passwordless keys
+ADD root.ssh/* /root/.ssh/
+RUN chmod -R 700 /root/.ssh/
+RUN chmod 600 /root/.ssh/*
+
+# allow inbound SSH and Vertica sockets
+EXPOSE 22
 EXPOSE 5433
 EXPOSE 5450
 
+#RUN /opt/vertica/sbin/install_vertica --license CE --accept-eula --hosts 127.0.0.1 --dba-user-password-disabled --failure-threshold NONE --no-system-configuration
+#RUN chown -R dbadmin /opt/v*
+# create Vertica Eon mode DB using MC
+
+# I have a fake AWS metadata endpoint here...
+#ENV PG_TEST_METADATA_URL=http://192.168.1.242/latest/meta-data/
+
 # start Minio, Vertica should be managed by MC
-#CMD ["minio"]
+
+# set AWS keys in env
+ENV AWS_ACCESS_KEY_ID="W64OSJPD8BMOJ91XCR38"
+ENV AWS_SECRET_ACCESS_KEY="d+nO8Y+W7cEkqtXWnTcO07GWdhpUhd62D0nRtu0k"
+
+ADD create-cluster.sh /tmp/
+ADD join-cluster.sh /tmp/
+ADD leave-cluster.sh /tmp/
+ADD create-start-db.sh /tmp/
+
+# use sshd as the interactive process
+# CMD ["/usr/sbin/sshd -D"]
+

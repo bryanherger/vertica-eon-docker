@@ -47,11 +47,11 @@ function shut_down() {
 
 trap "shut_down" SIGKILL SIGTERM SIGHUP SIGINT EXIT
 
-chown -R dbadmin:verticadba "$VERTICADATA"
+# chown -R dbadmin:verticadba "$VERTICADATA"
 
 ulimit -n 32768
 
 # start MC
-/opt/vconsole/bin/mctl start
+#/opt/vconsole/bin/mctl start
 
 exec "$@"
