@@ -38,7 +38,7 @@ Then run it.  Eon mode parameters are set with environment variables.  The follo
 - AWS_REGION=us-west-1
 
 Use the -e switch to pass variables, e.g.:
-`sudo docker run -it -e AWS_ENDPOINT=s3://foo/bar -p 15433:5433 vertica_eon:latest`
+`sudo docker run -it -e COMMUNAL_STORAGE=s3://foo/bar -p 15433:5433 vertica_eon:latest`
 
 Note that this will expose Vertica on port 15433 rather than default.  You can change -p to 5433:5433 to have Vertica on the default port.
 You also don't need to run interactive (-it), though it is handy for monitoring and debugging.
