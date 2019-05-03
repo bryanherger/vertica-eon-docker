@@ -38,6 +38,7 @@ Run it:  Eon mode parameters are set with environment variables.  The following 
 - AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 - AWS_ENDPOINT=192.168.1.206:9999
 - AWS_REGION=us-west-1
+- AWS_ENABLE_HTTPS=0
 
 Use the -e switch to pass variables, e.g.:
 `sudo docker run -it -e COMMUNAL_STORAGE=s3://foo/bar -p 15433:5433 vertica_eon:latest`
