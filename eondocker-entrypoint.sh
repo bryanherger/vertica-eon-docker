@@ -2,6 +2,7 @@
 set -e
 
 STOP_LOOP="false"
+REVIVE_DB="false"
 
 # if DATABASE_NAME is not provided use default one: "eondocker"
 export DATABASE_NAME="${DATABASE_NAME:-eondocker}"
@@ -13,6 +14,7 @@ export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-AKIAIOSFODNN7EXAMPLE}"
 export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY}"
 export AWS_ENDPOINT="${AWS_ENDPOINT:-192.168.1.206:9999}"
 export AWS_REGION="${AWS_REGION:-us-west-1}"
+export AWS_ENABLE_HTTPS="${AWS_ENABLE_HTTPS:-0}"
 # create local folders
 mkdir -p /eon/data
 mkdir -p /eon/depot
@@ -22,8 +24,8 @@ chown -R dbadmin /eon
 # ... edit bootstrap params ... use IP address, not hostname! ...
 sed -i "s/awsendpoint =/awsendpoint = $AWS_ENDPOINT/g" /opt/vertica/config/admintools.conf
 sed -i "s/awsregion =/awsregion = $AWS_REGION/g" /opt/vertica/config/admintools.conf
-echo awsenablehttps = 0 >> /opt/vertica/config/admintools.conf
-cat /opt/vertica/config/admintools.conf
+echo awsenablehttps = $AWS_ENABLE_HTTPS >> /opt/vertica/config/admintools.conf
+# cat /opt/vertica/config/admintools.conf
 
 # Vertica should be shut down properly
 function shut_down() {
@@ -50,11 +52,37 @@ function fix_filesystem_permissions() {
   chown dbadmin:verticadba /opt/vertica/config/admintools.conf
 }
 
+function do_kubernetes() {
+  echo 'Begin Kubernetes pod config!'
+  echo 'Fixing filesystem permissions'
+  # test for first node to create DB (todo: check for existing and restore!)
+  if [[ `hostname` == *l ]]; then 
+    echo 'First node in cluster'
+    fix_filesystem_permissions
+    echo "Creating Eon database on communal storage $COMMUNAL_STORAGE"
+    su - dbadmin -c "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY /opt/vertica/bin/admintools -t create_db --skip-fs-checks -s localhost -d ${DATABASE_NAME} ${DBPW} --data_path /eon/data --catalog_path /eon/catalog --shard-count 3 --communal-storage-location ${COMMUNAL_STORAGE} --depot-path /eon/depot --get-aws-credentials-from-env-vars"
+  # if adding a node
+  else
+    echo 'Adding a node to cluster'
+    echo '(todo!)'
+  fi
+}
+
 trap "shut_down" SIGKILL SIGTERM SIGHUP SIGINT
 
-
 echo 'Starting up'
-if [ ! -f ${VERTICADATA}/config/admintools.conf ]; then
+echo "Checking for existing DB at ${COMMUNAL_STORAGE}"
+echo s3cmd --host=$AWS_ENDPOINT --host-bucket=$AWS_ENDPOINT --access_key=$AWS_ACCESS_KEY_ID --secret_key=$AWS_SECRET_ACCESS_KEY --no-ssl ls $COMMUNAL_STORAGE
+EXISTING_DB=`s3cmd --host=$AWS_ENDPOINT --host-bucket=$AWS_ENDPOINT --access_key=$AWS_ACCESS_KEY_ID --secret_key=$AWS_SECRET_ACCESS_KEY --no-ssl ls $COMMUNAL_STORAGE`
+echo "s3cmd result: $EXISTING_DB"
+if [[ $EXISTING_DB == *s3* ]]; then
+  echo 'Database exists!  Todo: revive'
+  REVIVE_DB="True"
+  exit 1
+fi 
+if [ -n "$IS_KUBERNETES" ]; then
+  do_kubernetes
+elif [ ! -f ${VERTICADATA}/config/admintools.conf ]; then
   echo 'Fixing filesystem permissions'
   fix_filesystem_permissions
   echo "Creating Eon database on communal storage ${COMMUNAL_STORAGE}"
@@ -83,7 +111,7 @@ if [ -d /docker-entrypoint-initdb.d/ ]; then
   done
 fi
 
-echo "Vertica is now running"
+echo "Vertica is now running on `hostname`"
 
 while [ "${STOP_LOOP}" == "false" ]; do
   sleep 1

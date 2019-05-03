@@ -30,6 +30,9 @@ spec:
       containers:
       - name: vertica
         image: docker.io/bryanherger/vertica_eon:latest
+        env:
+        - name: IS_KUBERNETES
+          value: "true"
         ports:
         - containerPort: 5433
           name: vertica
