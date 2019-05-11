@@ -21,8 +21,7 @@ RUN yum -q -y update \
 
 RUN yum install -y epel-release && yum --enablerepo epel-testing install -y s3cmd
 
-RUN /opt/vertica/sbin/install_vertica --debug --license CE --accept-eula --hosts 127.0.0.1 \
-                                      --dba-user-password-disabled --failure-threshold NONE --no-system-configuration
+#RUN /opt/vertica/sbin/install_vertica --debug --license CE --accept-eula --hosts 127.0.0.1 --dba-user-password-disabled --failure-threshold NONE --no-system-configuration
 
 ENV PYTHON_EGG_CACHE /tmp/.python-eggs
 ENV VERTICADATA /home/dbadmin/docker
@@ -31,4 +30,11 @@ ENTRYPOINT ["/opt/vertica/bin/eondocker-entrypoint.sh"]
 ADD ./eondocker-entrypoint.sh /opt/vertica/bin/
 RUN chmod a+x /opt/vertica/bin/eondocker-entrypoint.sh
 
+ADD create-cluster.sh /tmp/
+ADD join-cluster.sh /tmp/
+ADD leave-cluster.sh /tmp/
+ADD create-start-db.sh /tmp/
+
+EXPOSE 22
 EXPOSE 5433
+
